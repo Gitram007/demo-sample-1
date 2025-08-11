@@ -1,149 +1,3 @@
-// import 'dart:io';
-// import 'package:sqflite/sqflite.dart';
-// import 'package:path/path.dart';
-// import 'package:path_provider/path_provider.dart';
-//
-// import '../models/product.dart';
-// import '../models/material_item.dart';
-//
-// class DatabaseHelper {
-//   static final DatabaseHelper _instance = DatabaseHelper._internal();
-//   factory DatabaseHelper() => _instance;
-//   DatabaseHelper._internal();
-//
-//   static Database? _db;
-//
-//   Future<Database> get db async {
-//     if (_db != null) return _db!;
-//     _db = await _initDb();
-//     return _db!;
-//   }
-//
-//   Future<Database> _initDb() async {
-//     Directory documentsDirectory = await getApplicationDocumentsDirectory();
-//     String path = join(documentsDirectory.path, "product_material.db");
-//
-//     return await openDatabase(
-//       path,
-//       version: 1,
-//       onCreate: _onCreate,
-//     );
-//   }
-//
-//   Future<void> _onCreate(Database db, int version) async {
-//     await db.execute('''
-//       CREATE TABLE products (
-//         id INTEGER PRIMARY KEY AUTOINCREMENT,
-//         name TEXT NOT NULL
-//       )
-//     ''');
-//
-//     await db.execute('''
-//       CREATE TABLE materials (
-//         id INTEGER PRIMARY KEY AUTOINCREMENT,
-//         name TEXT NOT NULL,
-//         qty INTEGER NOT NULL,
-//         unit TEXT NOT NULL
-//       )
-//     ''');
-//   }
-//
-//   // ------------------ Product CRUD ------------------
-//
-//   Future<int> insertProduct(Product product) async {
-//     final dbClient = await db;
-//     return await dbClient.insert(
-//       'products',
-//       {
-//         'name': product.name,
-//       },
-//     );
-//   }
-//
-//   Future<List<Product>> getAllProducts() async {
-//     final dbClient = await db;
-//     final res = await dbClient.query('products');
-//     return res.map((map) => Product(
-//       id: map['id'] as int,
-//       name: map['name'] as String,
-//     )).toList();
-//   }
-//
-//   Future<int> updateProduct(Product product) async {
-//     final dbClient = await db;
-//     return await dbClient.update(
-//       'products',
-//       {
-//         'name': product.name,
-//       },
-//       where: 'id = ?',
-//       whereArgs: [product.id],
-//     );
-//   }
-//
-//   Future<int> deleteProduct(int id) async {
-//     final dbClient = await db;
-//     return await dbClient.delete(
-//       'products',
-//       where: 'id = ?',
-//       whereArgs: [id],
-//     );
-//   }
-//
-//   // ------------------ Material CRUD ------------------
-//
-//   Future<int> insertMaterial(MaterialItem material) async {
-//     final dbClient = await db;
-//     return await dbClient.insert(
-//       'materials',
-//       {
-//         'name': material.name,
-//         'qty': material.qty,
-//         'unit': material.unit,
-//       },
-//     );
-//   }
-//
-//   Future<List<MaterialItem>> getAllMaterials() async {
-//     final dbClient = await db;
-//     final res = await dbClient.query('materials');
-//     return res.map((map) => MaterialItem(
-//       id: map['id'] as int,
-//       name: map['name'] as String,
-//       qty: map['qty'] as int,
-//       unit: map['unit'] as String,
-//     )).toList();
-//   }
-//
-//   Future<int> updateMaterial(MaterialItem material) async {
-//     final dbClient = await db;
-//     return await dbClient.update(
-//       'materials',
-//       {
-//         'name': material.name,
-//         'qty': material.qty,
-//         'unit': material.unit,
-//       },
-//       where: 'id = ?',
-//       whereArgs: [material.id],
-//     );
-//   }
-//
-//   Future<int> deleteMaterial(int id) async {
-//     final dbClient = await db;
-//     return await dbClient.delete(
-//       'materials',
-//       where: 'id = ?',
-//       whereArgs: [id],
-//     );
-//   }
-// }
-// CREATE TABLE product_material_map (
-// product_id INTEGER NOT NULL,
-// material_id INTEGER NOT NULL,
-// PRIMARY KEY(product_id, material_id)
-// )
-
 import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -171,21 +25,42 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Incremented version from 1 to 2
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade, // Added onUpgrade callback
     );
   }
 
+  // This is called when the database is first created.
   Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE products (
+    final batch = db.batch();
+    _createTables(batch);
+    await batch.commit();
+  }
+
+  // This is called when the database version is increased.
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    final batch = db.batch();
+    if (oldVersion < 2) {
+      // If the old version is less than 2, we run the table creation logic.
+      // Using "CREATE TABLE IF NOT EXISTS" is safe and ensures that we don't
+      // try to create tables that might already be there.
+      _createTables(batch);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  // Helper method to create all tables, used by both _onCreate and _onUpgrade.
+  void _createTables(Batch batch) {
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL
       )
     ''');
 
-    await db.execute('''
-      CREATE TABLE materials (
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS materials (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         qty INTEGER NOT NULL,
@@ -193,8 +68,8 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('''
-      CREATE TABLE product_material_map (
+    batch.execute('''
+      CREATE TABLE IF NOT EXISTS product_material_map (
         product_id INTEGER NOT NULL,
         material_id INTEGER NOT NULL,
         quantity REAL NOT NULL DEFAULT 1.0,
@@ -209,28 +84,20 @@ class DatabaseHelper {
 
   Future<int> insertProduct(Product product) async {
     final dbClient = await db;
-    return await dbClient.insert(
-      'products',
-      {'name': product.name},
-    );
+    return await dbClient.insert('products', product.toMap());
   }
 
   Future<List<Product>> getAllProducts() async {
     final dbClient = await db;
     final res = await dbClient.query('products');
-    return res
-        .map((map) => Product(
-      id: map['id'] as int,
-      name: map['name'] as String,
-    ))
-        .toList();
+    return res.map((map) => Product.fromMap(map)).toList();
   }
 
   Future<int> updateProduct(Product product) async {
     final dbClient = await db;
     return await dbClient.update(
       'products',
-      {'name': product.name},
+      product.toMap(),
       where: 'id = ?',
       whereArgs: [product.id],
     );
