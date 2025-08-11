@@ -209,28 +209,20 @@ class DatabaseHelper {
 
   Future<int> insertProduct(Product product) async {
     final dbClient = await db;
-    return await dbClient.insert(
-      'products',
-      {'name': product.name},
-    );
+    return await dbClient.insert('products', product.toMap());
   }
 
   Future<List<Product>> getAllProducts() async {
     final dbClient = await db;
     final res = await dbClient.query('products');
-    return res
-        .map((map) => Product(
-      id: map['id'] as int,
-      name: map['name'] as String,
-    ))
-        .toList();
+    return res.map((map) => Product.fromMap(map)).toList();
   }
 
   Future<int> updateProduct(Product product) async {
     final dbClient = await db;
     return await dbClient.update(
       'products',
-      {'name': product.name},
+      product.toMap(),
       where: 'id = ?',
       whereArgs: [product.id],
     );
