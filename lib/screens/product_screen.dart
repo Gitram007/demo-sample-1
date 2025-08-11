@@ -71,7 +71,7 @@ class _ProductScreenState extends State<ProductScreen> {
                 if (index != -1) _products[index] = updatedProduct;
               } else {
                 // Insert new product
-                final newProduct = Product(name: name);
+                final newProduct = Product(id: null, name: name);
                 final newId = await DatabaseHelper().insertProduct(newProduct);
                 _products.add(Product(id: newId, name: name));
               }
